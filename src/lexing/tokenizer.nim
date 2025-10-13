@@ -244,12 +244,6 @@ proc tokenize *(t: Tokenizer): seq[Token] =
             outt.add(Token(kind: tkRBrace, lexeme: "}", startPos: spos, len: 1,
                     line: t.line, col: t.col))
             continue
-        of '=':
-            let spos = t.i
-            discard bump(t)
-            outt.add(Token(kind: tkAssign, lexeme: "=", startPos: spos, len: 1,
-                    line: t.line, col: t.col))
-            continue
         else:
             let spos = t.i
             let c = bump(t)

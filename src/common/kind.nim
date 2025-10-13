@@ -15,7 +15,6 @@ type
         tkRBracket,     # ]
         tkLBrace,       # {
         tkRBrace,       # }
-        tkAssign,       # =
         tkVis,          # * and ~
         tkNewline,      # newline
         tkComment,
