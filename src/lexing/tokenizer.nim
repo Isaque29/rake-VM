@@ -117,17 +117,22 @@ proc tokenize *(t: Tokenizer): seq[Token] =
                     outt.add(Token(kind: dk, lexeme: "." & name,
                             startPos: start, len: t.i - start, line: t.line, col: t.col))
                 else:
-                    # treat as generic @IDENT -> emit tkAt + tkIdent
-                    outt.add(Token(kind: tkAt, lexeme: "@", startPos: start,
-                            len: 1, line: t.line, col: t.col))
                     outt.add(Token(kind: tkIdent, lexeme: name,
                             startPos: idStart, len: name.len, line: t.line, col: t.col))
                 continue
             else:
                 # plain dot (probably an error or at between tokens)
-                outt.add(Token(kind: tkAt, lexeme: "@", startPos: start,
+                outt.add(Token(kind: tkAt, lexeme: ".", startPos: start,
                         len: 1, line: t.line, col: t.col))
                 continue
+        
+        # access token
+        if ch == '@':
+            let pos = t.i
+            let c = bump(t)
+            outt.add(Token(kind: tkIdent, lexeme: $c, startPos: pos,
+                            len: 1, line: t.line, col: t.col))
+            continue
 
         # visibility token '*' or '~'
         if ch == '*' or ch == '~':
