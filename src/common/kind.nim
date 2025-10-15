@@ -23,7 +23,7 @@ type
         # top-level keywords / declarations
         tkHave,         # have
         tkEnd,          # end
-        tkFuncSet,      # func set          "funcset"
+        tkFuncSet,      # funcset
 
         # dot-commands
         tkDotSet,       # .set
@@ -41,8 +41,10 @@ type
 
 
         #ast nodes
-        astIf,          # .if (a)         have end 
-        astWhile,       # .while (a)      have end
-        astForIn,       # .for (a in b)   have end
-        astFunc,        # .func x(a) -> T have end
+        astIf,          # .if (a)          have end 
+        astWhile,       # .while (a)       have end
+        astForIn,       # .for (a in b)    have end
+
+        astFunc,        # funcset x(a) -> T have end
+
         
