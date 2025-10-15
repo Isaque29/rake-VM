@@ -38,3 +38,11 @@ type
         tkDotFor,       # .for
         tkDotBreak,     # .break
         tkDotContinue   # .continue
+
+
+        #ast nodes
+        astIf,          # .if (a)         have end 
+        astWhile,       # .while (a)      have end
+        astForIn,       # .for (a in b)   have end
+        astFunc,        # .func x(a) -> T have end
+        

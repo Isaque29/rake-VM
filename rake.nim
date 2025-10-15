@@ -1,5 +1,5 @@
 import std/os
-import src/parsing/parser
+import src/parsing/showTokens
 
 when isMainModule:
     echo "---- Rake VM ----"
