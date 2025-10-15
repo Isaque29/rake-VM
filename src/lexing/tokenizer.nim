@@ -84,8 +84,7 @@ proc tokenize *(t: Tokenizer): seq[Token] =
                 outt.add(Token(kind: tkNewline, lexeme: "\n", startPos: spos,
                         len: 1, line: t.line-1, col: t.col))
                 continue
-            else:
-                break
+            else: break
 
         if t.i >= t.len:
             outt.add(Token(kind: tkEof, lexeme: "", startPos: t.i, len: 0,
@@ -154,11 +153,18 @@ proc tokenize *(t: Tokenizer): seq[Token] =
                     len: t.i - start, line: t.line, col: t.col))
             continue
 
-        # numbers (integers)
+        # numbers (double like 1, 0.100)
         if isDigit(ch):
+            var matchedFirstDec: bool = false
             let start = t.i
             var idx = t.i
-            while idx < t.len and isDigit(t.src[idx]): idx.inc
+
+            while idx < t.len and (isDigit(t.src[idx]) or t.src[idx] == '.'):
+                if t.src[idx] == '.':
+                    if matchedFirstDec: break
+                    matchedFirstDec = true
+                idx.inc
+            
             let lit = subStrRange(t.src, start, idx)
             while t.i < idx: discard bump(t)
             outt.add(Token(kind: tkNumber, lexeme: lit, startPos: start,
