@@ -21,6 +21,8 @@ type
         tkUnknown,
 
         # top-level keywords / declarations
+        tkHave,         # have
+        tkEnd,          # end
         tkFuncSet,      # func set          "funcset"
 
         # dot-commands

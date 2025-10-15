@@ -7,6 +7,6 @@ proc parse* (src: string): void =
     var toks: seq[Token] = tz.tokenize()
     for t in toks:
         if t.kind == tkNewLine:
-            echo '\n'
+            echo '\0'
             continue
         echo t.line, ":", t.col, " ", $t.kind, " -> '", t.lexeme, "'"

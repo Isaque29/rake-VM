@@ -52,6 +52,8 @@ proc subStrRange(s: string, a, b: int): string {.inline.} =
 
 proc keywordKind(ident: string): Kind =
     case ident
+        of "have": return tkHave
+        of "end": return tkEnd
         of "funcset": return tkFuncset
         else: return tkIdent
 

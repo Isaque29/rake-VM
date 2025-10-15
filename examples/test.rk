@@ -1,7 +1,7 @@
 .set i 0
 
-.while (true)
-{
+.while (true) have
     .set i .invoke __sum(i, 1)
     .invoke echo(i)
-}
+end
+
