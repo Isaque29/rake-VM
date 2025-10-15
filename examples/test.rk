@@ -1,7 +1,10 @@
 .set i 0
 
 .while (true) have
-    .set i .invoke __sum(i, 1)
-    .invoke echo(i)
+    .set i .invoke __sum(i, .invoke __div(i, 1))
+    .invoke display(i)
 end
 
+funcset display(message: string) -> void have
+    .invoke echo(message)
+end

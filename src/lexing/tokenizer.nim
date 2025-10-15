@@ -123,16 +123,13 @@ proc tokenize *(t: Tokenizer): seq[Token] =
                             startPos: idStart, len: name.len, line: t.line, col: t.col))
                 continue
             else:
-                # plain dot (probably an error or at between tokens)
-                outt.add(Token(kind: tkAt, lexeme: ".", startPos: start,
-                        len: 1, line: t.line, col: t.col))
                 continue
         
         # access token
         if ch == '@':
             let pos = t.i
             let c = bump(t)
-            outt.add(Token(kind: tkIdent, lexeme: $c, startPos: pos,
+            outt.add(Token(kind: tkAt, lexeme: $c, startPos: pos,
                             len: 1, line: t.line, col: t.col))
             continue
 

@@ -1,7 +1,8 @@
 .if (a)            have end 
 .while (a)         have end
 .for (a in b)      have end
-.funcset x(a) -> T have end
+
+funcset x(a) -> T  have end
 
 () [] { }
 identifier
