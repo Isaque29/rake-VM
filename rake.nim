@@ -1,5 +1,8 @@
 import std/os
-import src/parsing/showTokens
+import src/parsing/parser
+import src/parsing/showTree
+import src/lexing/tokenizer
+import src/common/token
 
 when isMainModule:
     echo "---- Rake VM ----"
@@ -18,6 +21,16 @@ when isMainModule:
         quit(1)
     
     var source: string = readFile(path)
-    parse(source)
 
+    var tz: Tokenizer = newTokenizer(source)
+    var toks: seq[Token] = tz.tokenize()
+    stdout.write("=== tokens ===\n")
+    for i, t in toks:
+        stdout.write($i & "  kind=" & $t.kind & " lex='" & t.lexeme & "' pos=" & $t.startPos & "\n")
+    stdout.write("tokens.len = " & $toks.len & "\n")
+    stdout.write("=============\n")
 
+    var p: Parser = newParser(toks)
+    var astProgram = p.parseProgram()
+    astProgram.printAst()
+    astProgram.printRootSummary()

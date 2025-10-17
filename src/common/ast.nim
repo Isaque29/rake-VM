@@ -13,5 +13,5 @@ proc newAst*(k: Kind; lex: string = ""): Ast =
         children: @[],
         span: Span(startPos: 0, len: 0, line: 0, col: 0))
 
-proc addChild*(parent: var Ast; child: Ast) =
+method addChild*(parent: var Ast; child: Ast) {.base.} =
     parent.children.add(child)

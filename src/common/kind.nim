@@ -41,10 +41,13 @@ type
 
 
         #ast nodes
+        astProgram,
         astIf,          # .if (a)          have end 
         astWhile,       # .while (a)       have end
         astForIn,       # .for (a in b)    have end
 
         astFunc,        # funcset x(a) -> T have end
+        astEnum,
+        
 
         
