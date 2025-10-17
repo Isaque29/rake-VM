@@ -54,7 +54,25 @@ proc keywordKind(ident: string): Kind =
     case ident
         of "have": return tkHave
         of "end": return tkEnd
+        of "in": return tkIn
         of "funcset": return tkFuncset
+
+        of "int": return tkType
+        of "int8": return tkType
+        of "int16": return tkType
+        of "int32": return tkType
+        of "int64": return tkType
+        of "nil": return tkType
+        of "char": return tkType
+        of "bool": return tkType
+        of "string": return tkType
+        of "enum": return tkType
+        of "object": return tkType
+        of "auto": return tkType
+        of "number": return tkType
+        of "seq": return tkType
+        of "float": return tkType
+
         else: return tkIdent
 
 proc dotCmdKind(name: string): Kind =

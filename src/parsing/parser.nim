@@ -42,7 +42,7 @@ method advance(p: Parser): Token {.base.} =
     return t
 
 # consume expected kind if present; otherwise consume one token (to make progress)
-method expectSilent(p: Parser; k: Kind): Token {.base.} =
+method expect(p: Parser; k: Kind): Token {.base.} =
     let t = peek(p)
     if t.kind == k:
         return advance(p)
@@ -90,7 +90,7 @@ proc parsePrimary(p: Parser): Ast =
                     if peekKind(p) == tkComma:
                         discard advance(p); skipNewlines(p); continue
                     break
-                discard expectSilent(p, tkRParen)
+                discard expect(p, tkRParen)
         return node
     of tkDotInvoke:
         # .invoke NAME? (args...)
@@ -112,7 +112,7 @@ proc parsePrimary(p: Parser): Ast =
                         if peekKind(p) == tkComma:
                             discard advance(p); skipNewlines(p); continue
                         break
-                    discard expectSilent(p, tkRParen)
+                    discard expect(p, tkRParen)
             var inv = newAst(tkDotInvoke, dt.lexeme)
             addChild(inv, fn)
             return inv
@@ -125,12 +125,62 @@ proc parsePrimary(p: Parser): Ast =
     of tkLParen:
         discard advance(p)
         let inner = parsePrimary(p)
-        discard expectSilent(p, tkRParen)
+        discard expect(p, tkRParen)
         return inner
     else:
         # unknown token: consume and return unknown node
         let t = advance(p)
         return newAst(tkUnknown, t.lexeme)
+
+proc parseType(p: Parser): Ast =
+    skipNewlines(p)
+    if atEnd(p): return newAst(tkUnknown, "")
+    if peekKind(p) != tkType: return newAst(tkUnknown, "")
+
+    let baseTok = advance(p)
+    var typeNode = newAst(tkType, baseTok.lexeme)
+    skipNewlines(p)
+
+    if not atEnd(p) and peek(p).lexeme == "<":
+        discard advance(p)
+        skipNewlines(p)
+
+        if not atEnd(p) and peek(p).lexeme == ">":
+            discard advance(p)
+            return typeNode
+
+        while true:
+            skipNewlines(p)
+            if atEnd(p):
+                break
+
+            let arg = parseType(p)
+            if arg.kind == tkUnknown:
+                if not atEnd(p):
+                    discard advance(p)
+                    skipNewlines(p)
+                    continue
+                else:
+                    break
+            addChild(typeNode, arg)
+            skipNewlines(p)
+
+            if atEnd(p):
+                break
+
+            if peekKind(p) == tkComma or peek(p).lexeme == ",":
+                discard advance(p)
+                skipNewlines(p)
+                continue
+            elif peek(p).lexeme == ">":
+                discard advance(p)
+                break
+            else:
+                discard advance(p)
+                skipNewlines(p)
+                continue
+
+    return typeNode
 
 method parseProgram* (p: Parser): Ast {.base.} =
     let root = newAst(astProgram, "program")
@@ -159,9 +209,21 @@ method parseProgram* (p: Parser): Ast {.base.} =
             skipNewlines(p)
             let target = parsePrimary(p)
             skipNewlines(p)
+
+            var typeNode: Ast = newAst(tkUnknown, "")
+            if not atEnd(p) and peek(p).lexeme == ":":
+                discard advance(p) # eats ':'
+                skipNewlines(p)
+                typeNode = parseType(p)
+                skipNewlines(p)
+
             let value = parsePrimary(p)
+
             var n = newAst(tok.kind, tok.lexeme)
-            addChild(n, target); addChild(n, value)
+            addChild(n, target)
+            if typeNode.kind != tkUnknown:
+                addChild(n, typeNode)
+            addChild(n, value)
             addChild(stack[^1].node, n)
         of tkDotInvoke:
             let tok = advance(p)
@@ -182,7 +244,7 @@ method parseProgram* (p: Parser): Ast {.base.} =
                             if peekKind(p) == tkComma:
                                 discard advance(p); skipNewlines(p); continue
                             break
-                        discard expectSilent(p, tkRParen)
+                        discard expect(p, tkRParen)
                 var n = newAst(tkDotInvoke, tok.lexeme)
                 addChild(n, fn)
                 addChild(stack[^1].node, n)
@@ -194,11 +256,11 @@ method parseProgram* (p: Parser): Ast {.base.} =
         of tkDotWhile:
             let tok = advance(p)
             skipNewlines(p)
-            discard expectSilent(p, tkLParen)
+            discard expect(p, tkLParen)
             let cond = parsePrimary(p)
-            discard expectSilent(p, tkRParen)
+            discard expect(p, tkRParen)
             skipNewlines(p)
-            discard expectSilent(p, tkHave)
+            discard expect(p, tkHave)
             var w = newAst(astWhile, tok.lexeme)
             addChild(w, cond)
 
@@ -207,11 +269,11 @@ method parseProgram* (p: Parser): Ast {.base.} =
         of tkDotIf:
             let tok = advance(p)
             skipNewlines(p)
-            discard expectSilent(p, tkLParen)
+            discard expect(p, tkLParen)
             let cond = parsePrimary(p)
-            discard expectSilent(p, tkRParen)
+            discard expect(p, tkRParen)
             skipNewlines(p)
-            discard expectSilent(p, tkHave)
+            discard expect(p, tkHave)
             var ifn = newAst(astIf, tok.lexeme)
             addChild(ifn, cond)
 
@@ -220,17 +282,16 @@ method parseProgram* (p: Parser): Ast {.base.} =
         of tkDotFor:
             let tok = advance(p)
             skipNewlines(p)
-            discard expectSilent(p, tkLParen)
+            discard expect(p, tkLParen)
             var varNode = parsePrimary(p)
             skipNewlines(p)
 
-            # accept either 'in' as ident or some token
-            if peekKind(p) == tkIdent and peek(p).lexeme == "in":
-                discard advance(p)
+            discard expect(p, tkIn)
             let iterable = parsePrimary(p)
-            discard expectSilent(p, tkRParen)
+            discard expect(p, tkRParen)
             skipNewlines(p)
-            discard expectSilent(p, tkHave)
+            
+            discard expect(p, tkHave)
             var fn = newAst(astForIn, tok.lexeme)
             addChild(fn, varNode); addChild(fn, iterable)
             pushFrame(stack, fn, @[tkEnd])
@@ -238,13 +299,13 @@ method parseProgram* (p: Parser): Ast {.base.} =
             discard advance(p) # discard here because the keyword is already known
 
             skipNewlines(p)
-            let nameTok = expectSilent(p, tkIdent)
+            let nameTok = expect(p, tkIdent)
             var fnNode = newAst(astFunc, nameTok.lexeme)
-            discard expectSilent(p, tkLParen)
+            discard expect(p, tkLParen)
             skipNewlines(p)
             if peekKind(p) != tkRParen:
                 while true:
-                    let param = expectSilent(p, tkIdent)
+                    let param = expect(p, tkIdent)
                     var paramNode = newAst(tkIdent, param.lexeme)
                     if peekKind(p) == tkColon:
                         discard advance(p)
@@ -255,7 +316,7 @@ method parseProgram* (p: Parser): Ast {.base.} =
                     if peekKind(p) == tkComma:
                         discard advance(p); skipNewlines(p); continue
                     break
-            discard expectSilent(p, tkRParen)
+            discard expect(p, tkRParen)
             skipNewlines(p)
             if peekKind(p) == tkArrow:
                 discard advance(p)
@@ -264,7 +325,7 @@ method parseProgram* (p: Parser): Ast {.base.} =
                     let rn = newAst(tkIdent, rt.lexeme)
                     addChild(fnNode, rn)
             skipNewlines(p)
-            discard expectSilent(p, tkHave)
+            discard expect(p, tkHave)
             pushFrame(stack, fnNode, @[tkEnd])
         else:
             # expression / statement fallback

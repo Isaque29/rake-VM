@@ -1,0 +1,5 @@
+.if (true) do
+    .invoke echo 123
+.else have
+    .invoke echo 123
+end

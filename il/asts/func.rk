@@ -1,0 +1,3 @@
+funcset display(message: string) -> void have
+    .invoke echo(message)
+end

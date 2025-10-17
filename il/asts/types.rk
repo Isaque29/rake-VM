@@ -1,0 +1,6 @@
+.const a: int 199
+.const b: seq<int> [1, 2, 3]
+.const c: double<string, int> ["age": 20]
+.const d: bool false
+.const e: nil nil
+

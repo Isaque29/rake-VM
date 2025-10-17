@@ -6,6 +6,9 @@ type
         tkAt,           # acess between identifiers, ex: Character@new
         tkNumber,
         tkString,
+        tkType,         # int, int8/16/32/64, string, bool, seq<T>, float, char,
+                        # enum, object, number, seq<>, auto...
+        
         tkArrow,        # ->
         tkColon,        # :
         tkComma,        # ,
@@ -23,6 +26,7 @@ type
         # top-level keywords / declarations
         tkHave,         # have
         tkEnd,          # end
+        tkIn,           # in
         tkFuncSet,      # funcset
 
         # dot-commands
