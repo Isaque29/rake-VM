@@ -24,11 +24,12 @@ when isMainModule:
 
     var tz: Tokenizer = newTokenizer(source)
     var toks: seq[Token] = tz.tokenize()
-    stdout.write("=== tokens ===\n")
-    for i, t in toks:
-        stdout.write($i & "  kind=" & $t.kind & " lex='" & t.lexeme & "' pos=" & $t.startPos & "\n")
-    stdout.write("tokens.len = " & $toks.len & "\n")
-    stdout.write("=============\n")
+    
+    # stdout.write("=== tokens ===\n")
+    # for i, t in toks:
+    #     stdout.write($i & "  kind=" & $t.kind & " lex='" & t.lexeme & "' pos=" & $t.startPos & "\n")
+    # stdout.write("tokens.len = " & $toks.len & "\n")
+    # stdout.write("=============\n")
 
     var p: Parser = newParser(toks)
     var astProgram = p.parseProgram()

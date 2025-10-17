@@ -276,4 +276,4 @@ method parseProgram* (p: Parser): Ast {.base.} =
         let finished = popFrame(stack)
         addChild(stack[^1].node, finished.node)
 
-    return root
+    return stack[0].node
