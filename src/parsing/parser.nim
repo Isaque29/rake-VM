@@ -296,37 +296,77 @@ method parseProgram* (p: Parser): Ast {.base.} =
             addChild(fn, varNode); addChild(fn, iterable)
             pushFrame(stack, fn, @[tkEnd])
         of tkFuncSet:
-            discard advance(p) # discard here because the keyword is already known
-
+            discard advance(p)                                    # eats 'funcset'
             skipNewlines(p)
+
             let nameTok = expect(p, tkIdent)
             var fnNode = newAst(astFunc, nameTok.lexeme)
+
+            # --- params node (agrupa parâmetros) ---
+            var paramsNode = newAst(astParams, "")        # nó que terá os parâmetros como filhos
+
             discard expect(p, tkLParen)
             skipNewlines(p)
+
             if peekKind(p) != tkRParen:
                 while true:
-                    let param = expect(p, tkIdent)
-                    var paramNode = newAst(tkIdent, param.lexeme)
+                    # cada parâmetro: name [ : Type ]
+                    let paramTok = expect(p, tkIdent)
+                    var paramNode = newAst(tkIdent, paramTok.lexeme)    # mantém tkIdent para o nome
+
+                    # opcionais: tipo do parâmetro após ':' (usa parseType que aceita apenas tkType)
                     if peekKind(p) == tkColon:
-                        discard advance(p)
-                        if peekKind(p) == tkIdent:
-                            let typ = advance(p)
-                            paramNode.lexeme &= ":" & typ.lexeme
-                    addChild(fnNode, paramNode)
+                        discard advance(p)        # consome ':'
+                        skipNewlines(p)
+                        let tnode = parseType(p)
+                        # se parseType retornou algo válido, anexa como filho do paramNode
+                        if tnode.kind != tkUnknown:
+                            addChild(paramNode, tnode)
+
+                    addChild(paramsNode, paramNode)
+
+                    skipNewlines(p)
                     if peekKind(p) == tkComma:
-                        discard advance(p); skipNewlines(p); continue
+                        discard advance(p)
+                        skipNewlines(p)
+                        continue
                     break
+
             discard expect(p, tkRParen)
             skipNewlines(p)
+
+            # optional return type -> anexar como filho logo após params (por convenção)
             if peekKind(p) == tkArrow:
                 discard advance(p)
-                if peekKind(p) == tkIdent:
-                    let rt = advance(p)
-                    let rn = newAst(tkIdent, rt.lexeme)
-                    addChild(fnNode, rn)
+                skipNewlines(p)
+                # se o retorno for um tipo tokenizado como tkType
+                let retNode =
+                    if peekKind(p) == tkType:
+                        parseType(p)
+                    else:
+                        # permissivo: se não houver tkType, tente aceitar ident (ou marca unknown)
+                        if peekKind(p) == tkIdent:
+                            let r = advance(p)
+                            newAst(tkIdent, r.lexeme)
+                        else:
+                            newAst(tkUnknown, "")
+                if retNode.kind != tkUnknown:
+                    addChild(fnNode, retNode)
+
             skipNewlines(p)
             discard expect(p, tkHave)
-            pushFrame(stack, fnNode, @[tkEnd])
+            skipNewlines(p)
+
+            # --- corpo separado: criar astBlock e anexar ao fnNode, depois empilhar o body para receber statements ---
+            let bodyNode = newAst(astBlock, "func-body")
+            addChild(fnNode, paramsNode)     # primeiro os params
+            addChild(fnNode, bodyNode)         # depois o body node (será preenchido pelo frame)
+
+            # anexa fnNode ao pai (o programa ou frame atual)
+            addChild(stack[^1].node, fnNode)
+
+            # agora empilha o bodyNode para coletar statements até o 'end'
+            pushFrame(stack, bodyNode, @[tkEnd])
         else:
             # expression / statement fallback
             let e = parsePrimary(p)

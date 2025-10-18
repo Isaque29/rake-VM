@@ -69,6 +69,7 @@ proc keywordKind(ident: string): Kind =
         of "enum": return tkType
         of "object": return tkType
         of "auto": return tkType
+        of "void": return tkType
         of "number": return tkType
         of "seq": return tkType
         of "float": return tkType

@@ -7,7 +7,7 @@ type
         tkNumber,
         tkString,
         tkType,         # int, int8/16/32/64, string, bool, seq<T>, float, char,
-                        # enum, object, number, seq<>, auto...
+                        # enum, object, number, seq<>, auto, void, nil...
         
         tkArrow,        # ->
         tkColon,        # :
@@ -45,6 +45,9 @@ type
 
 
         #ast nodes
+        astParams,
+        astBlock,
+        
         astProgram,
         astIf,          # .if (a)          have end 
         astWhile,       # .while (a)       have end

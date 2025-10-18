@@ -1,7 +1,7 @@
 import kind, span
 
 type
-    Ast* = object
+    Ast* = ref object
         kind*: Kind
         lexeme*: string
         children*: seq[Ast]
