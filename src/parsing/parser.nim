@@ -16,14 +16,7 @@ type
     Frame = object
         node*: Ast
         endKinds*: seq[Kind]
-
-proc pushFrame(st: var seq[Frame]; node: Ast; endKs: seq[Kind]) =
-    st.add(Frame(node: node, endKinds: endKs))
-
-proc popFrame(st: var seq[Frame]): Frame =
-    let f = st[^1]
-    st.del(st.len - 1)
-    return f
+        pendingAttach*: Ast
 
 method atEnd(p: Parser): bool {.base.} =
     p.pos >= p.tokens.len or (p.pos < p.tokens.len and p.tokens[p.pos].kind == tkEof)
@@ -69,6 +62,12 @@ proc parsePrimary(p: Parser): Ast =
     of tkNumber:
         let t = advance(p)
         return newAst(tkNumber, t.lexeme)
+    of tkBool:
+        let t = advance(p)
+        return newAst(tkBool, t.lexeme)
+    of tkNil:
+        let t = advance(p)
+        return newAst(tkNil, t.lexeme)
     of tkString:
         let t = advance(p)
         return newAst(tkString, t.lexeme)
@@ -76,7 +75,6 @@ proc parsePrimary(p: Parser): Ast =
         let id = advance(p)
         var node = newAst(tkIdent, id.lexeme)
 
-        # optional call
         if peekKind(p) == tkLParen:
             discard advance(p) # eat '('
             skipNewlines(p)
@@ -132,7 +130,7 @@ proc parsePrimary(p: Parser): Ast =
         let t = advance(p)
         return newAst(tkUnknown, t.lexeme)
 
-proc parseType(p: Parser): Ast =
+method parseType(p: Parser): Ast {.base.} =
     skipNewlines(p)
     if atEnd(p): return newAst(tkUnknown, "")
     if peekKind(p) != tkType: return newAst(tkUnknown, "")
@@ -182,49 +180,92 @@ proc parseType(p: Parser): Ast =
 
     return typeNode
 
-method parseProgram* (p: Parser): Ast {.base.} =
-    let root = newAst(astProgram, "program")
-    var stack: seq[Frame] = @[]
-    pushFrame(stack, root, @[tkEof])
+method parseBody(p: Parser; stopKinds: seq[Kind]): Ast {.base.} =
+    # helper: create empty pendingAttach sentinel
+    proc emptyPending(): Ast =
+        newAst(tkUnknown, "")
 
-    while stack.len > 0 and not atEnd(p):
+    let root = newAst(astBlock, "block")
+    var st: seq[Frame] = @[]
+    st.add(Frame(node: root, endKinds: stopKinds, pendingAttach: emptyPending()))
+
+    skipNewlines(p)
+    while st.len > 0 and not atEnd(p):
         skipNewlines(p)
         if atEnd(p): break
-        let cur = stack[^1]
+
+        var top = st[^1]
         let k = peekKind(p)
 
-        # close frame if token matches any endKinds
-        if k in cur.endKinds:
-            discard advance(p) # consume the end token (tkEnd, tkDotElse, etc.)
-            if stack.len > 1:
-                let finished = popFrame(stack)
-                addChild(stack[^1].node, finished.node)
-                continue
+        # handle special case: if k closes the top frame
+        if k in top.endKinds:
+            # special handling for .elif / .else when top.pendingAttach is an astIf
+            if (k == tkDotElif or k == tkDotElse) and top.pendingAttach.kind == astIf:
+                # consume the token and create clause frames (do not attach astIf to parent yet)
+                if k == tkDotElif:
+                    discard advance(p) # consume .elif
+                    skipNewlines(p)
+                    discard expect(p, tkLParen)
+                    let elifCond = parsePrimary(p)
+                    discard expect(p, tkRParen)
+                    skipNewlines(p)
+                    discard expect(p, tkHave)
+                    # create clause and its body, attach clause to the astIf (pendingAttach)
+                    var clause = newAst(astClause, ".elif")
+                    addChild(clause, elifCond)
+                    let clauseBody = newAst(astBlock, "clause")
+                    addChild(clause, clauseBody)
+                    addChild(top.pendingAttach, clause)
+                    # push new frame for the clause body (it will close on end/else/elif)
+                    st.add(Frame(node: clauseBody, endKinds: @[tkEnd, tkDotElse, tkDotElif], pendingAttach: emptyPending()))
+                    continue
+                else:
+                    # .else
+                    discard advance(p) # consume .else
+                    skipNewlines(p)
+                    discard expect(p, tkHave)
+                    var clause = newAst(astClause, "true")
+                    var clauseBody = newAst(astBlock, "clause")
+                    addChild(clause, clauseBody)
+                    addChild(top.pendingAttach, clause)
+                    # push a clause body frame that only ends on tkEnd
+                    st.add(Frame(node: clauseBody, endKinds: @[tkEnd], pendingAttach: emptyPending()))
+                    continue
             else:
-                break
+                # normal end of the top frame: consume end token and pop frame
+                discard advance(p)
+                let finished = st[^1]
+                st.del(st.len - 1)
+                if st.len == 0:
+                    break
+                if finished.pendingAttach.kind != tkUnknown:
+                    # attach pendingAttach node to parent node
+                    addChild(st[^1].node, finished.pendingAttach)
+                else:
+                    addChild(st[^1].node, finished.node)
+                continue
 
+        # not an end token => parse a statement in the context of top.node
         case k
         of tkDotSet, tkDotLet, tkDotConst:
             let tok = advance(p)
             skipNewlines(p)
             let target = parsePrimary(p)
             skipNewlines(p)
-
             var typeNode: Ast = newAst(tkUnknown, "")
             if not atEnd(p) and peek(p).lexeme == ":":
-                discard advance(p) # eats ':'
+                discard advance(p)
                 skipNewlines(p)
                 typeNode = parseType(p)
                 skipNewlines(p)
-
             let value = parsePrimary(p)
-
             var n = newAst(tok.kind, tok.lexeme)
             addChild(n, target)
             if typeNode.kind != tkUnknown:
                 addChild(n, typeNode)
             addChild(n, value)
-            addChild(stack[^1].node, n)
+            addChild(top.node, n)
+
         of tkDotInvoke:
             let tok = advance(p)
             skipNewlines(p)
@@ -247,12 +288,13 @@ method parseProgram* (p: Parser): Ast {.base.} =
                         discard expect(p, tkRParen)
                 var n = newAst(tkDotInvoke, tok.lexeme)
                 addChild(n, fn)
-                addChild(stack[^1].node, n)
+                addChild(top.node, n)
             else:
                 let callee = parsePrimary(p)
                 var n = newAst(tkDotInvoke, tok.lexeme)
                 addChild(n, callee)
-                addChild(stack[^1].node, n)
+                addChild(top.node, n)
+
         of tkDotWhile:
             let tok = advance(p)
             skipNewlines(p)
@@ -261,11 +303,14 @@ method parseProgram* (p: Parser): Ast {.base.} =
             discard expect(p, tkRParen)
             skipNewlines(p)
             discard expect(p, tkHave)
+            # create astWhile and its body, but DO NOT attach to parent yet; attach when body closes
             var w = newAst(astWhile, tok.lexeme)
             addChild(w, cond)
+            let bodyBlock = newAst(astBlock, "block")
+            addChild(w, bodyBlock)
+            # push a frame for the while body, with pendingAttach = w (so w is attached to parent when body closes)
+            st.add(Frame(node: bodyBlock, endKinds: @[tkEnd], pendingAttach: w))
 
-            # frame ends on tkEnd
-            pushFrame(stack, w, @[tkEnd])
         of tkDotIf:
             let tok = advance(p)
             skipNewlines(p)
@@ -274,107 +319,86 @@ method parseProgram* (p: Parser): Ast {.base.} =
             discard expect(p, tkRParen)
             skipNewlines(p)
             discard expect(p, tkHave)
+            # create if node; create initial then clause and push frame that will close on end/elif/else
             var ifn = newAst(astIf, tok.lexeme)
             addChild(ifn, cond)
+            let thenBody = newAst(astBlock, "then")
+            addChild(ifn, thenBody)   # attach then-block as first child of if
+            # push frame for the thenBody; pendingAttach holds the astIf so we can add clauses and only attach at final end
+            st.add(Frame(node: thenBody, endKinds: @[tkEnd, tkDotElse, tkDotElif], pendingAttach: ifn))
 
-            # then-block ends on tkEnd or tkDotElse or tkDotElif
-            pushFrame(stack, ifn, @[tkEnd, tkDotElse, tkDotElif])
         of tkDotFor:
             let tok = advance(p)
             skipNewlines(p)
             discard expect(p, tkLParen)
-            var varNode = parsePrimary(p)
+            let varNode = parsePrimary(p)
             skipNewlines(p)
-
-            discard expect(p, tkIn)
+            if peekKind(p) == tkIn or (peekKind(p) == tkIdent and peek(p).lexeme == "in"):
+                discard advance(p)
             let iterable = parsePrimary(p)
             discard expect(p, tkRParen)
             skipNewlines(p)
-            
             discard expect(p, tkHave)
-            var fn = newAst(astForIn, tok.lexeme)
-            addChild(fn, varNode); addChild(fn, iterable)
-            pushFrame(stack, fn, @[tkEnd])
-        of tkFuncSet:
-            discard advance(p)                                    # eats 'funcset'
-            skipNewlines(p)
+            var forn = newAst(astForIn, tok.lexeme)
+            addChild(forn, varNode)
+            addChild(forn, iterable)
+            let bodyBlock = newAst(astBlock, "block")
+            addChild(forn, bodyBlock)
+            st.add(Frame(node: bodyBlock, endKinds: @[tkEnd], pendingAttach: forn))
 
+        of tkFuncSet:
+            discard advance(p) # consumes 'funcset'
+            skipNewlines(p)
             let nameTok = expect(p, tkIdent)
             var fnNode = newAst(astFunc, nameTok.lexeme)
-
-            # --- params node (agrupa parâmetros) ---
-            var paramsNode = newAst(astParams, "")        # nó que terá os parâmetros como filhos
-
+            var paramsNode = newAst(astParams, "")
             discard expect(p, tkLParen)
             skipNewlines(p)
-
             if peekKind(p) != tkRParen:
                 while true:
-                    # cada parâmetro: name [ : Type ]
                     let paramTok = expect(p, tkIdent)
-                    var paramNode = newAst(tkIdent, paramTok.lexeme)    # mantém tkIdent para o nome
-
-                    # opcionais: tipo do parâmetro após ':' (usa parseType que aceita apenas tkType)
+                    var paramNode = newAst(tkIdent, paramTok.lexeme)
                     if peekKind(p) == tkColon:
-                        discard advance(p)        # consome ':'
-                        skipNewlines(p)
+                        discard advance(p); skipNewlines(p)
                         let tnode = parseType(p)
-                        # se parseType retornou algo válido, anexa como filho do paramNode
                         if tnode.kind != tkUnknown:
                             addChild(paramNode, tnode)
-
                     addChild(paramsNode, paramNode)
-
                     skipNewlines(p)
                     if peekKind(p) == tkComma:
-                        discard advance(p)
-                        skipNewlines(p)
-                        continue
+                        discard advance(p); skipNewlines(p); continue
                     break
-
             discard expect(p, tkRParen)
             skipNewlines(p)
-
-            # optional return type -> anexar como filho logo após params (por convenção)
             if peekKind(p) == tkArrow:
-                discard advance(p)
-                skipNewlines(p)
-                # se o retorno for um tipo tokenizado como tkType
-                let retNode =
-                    if peekKind(p) == tkType:
-                        parseType(p)
-                    else:
-                        # permissivo: se não houver tkType, tente aceitar ident (ou marca unknown)
-                        if peekKind(p) == tkIdent:
-                            let r = advance(p)
-                            newAst(tkIdent, r.lexeme)
-                        else:
-                            newAst(tkUnknown, "")
-                if retNode.kind != tkUnknown:
-                    addChild(fnNode, retNode)
-
+                discard advance(p); skipNewlines(p)
+                if peekKind(p) == tkType:
+                    let ret = parseType(p)
+                    if ret.kind != tkUnknown:
+                        addChild(fnNode, ret)
+                elif peekKind(p) == tkIdent:
+                    let r = advance(p)
+                    addChild(fnNode, newAst(tkIdent, r.lexeme))
             skipNewlines(p)
             discard expect(p, tkHave)
-            skipNewlines(p)
+            # attach params and body placeholder, push frame for body with pendingAttach = fnNode
+            addChild(fnNode, paramsNode)
+            let bodyBlock = newAst(astBlock, "func-body")
+            addChild(fnNode, bodyBlock)
+            st.add(Frame(node: bodyBlock, endKinds: @[tkEnd], pendingAttach: fnNode))
 
-            # --- corpo separado: criar astBlock e anexar ao fnNode, depois empilhar o body para receber statements ---
-            let bodyNode = newAst(astBlock, "func-body")
-            addChild(fnNode, paramsNode)     # primeiro os params
-            addChild(fnNode, bodyNode)         # depois o body node (será preenchido pelo frame)
-
-            # anexa fnNode ao pai (o programa ou frame atual)
-            addChild(stack[^1].node, fnNode)
-
-            # agora empilha o bodyNode para coletar statements até o 'end'
-            pushFrame(stack, bodyNode, @[tkEnd])
         else:
-            # expression / statement fallback
+            # fallback expression / single-item (use parsePrimary)
             let e = parsePrimary(p)
-            addChild(stack[^1].node, e)
+            addChild(top.node, e)
 
-    # close remaining frames
-    while stack.len > 1:
-        let finished = popFrame(stack)
-        addChild(stack[^1].node, finished.node)
+    # end loop
+    return st[^1].node
 
-    return stack[0].node
+method parseProgram* (p: Parser): Ast {.base.} =
+    var root = newAst(astProgram, "program")
+    # use parseBody to build program children until EOF
+    let blockk = parseBody(p, @[tkEof])
+    for c in blockk.children:
+        addChild(root, c)
+    return root

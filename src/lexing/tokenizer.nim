@@ -57,12 +57,15 @@ proc keywordKind(ident: string): Kind =
         of "in": return tkIn
         of "funcset": return tkFuncset
 
+        of "nil": return tkNil
+        of "true": return tkBool
+        of "false": return tkBool
+
         of "int": return tkType
         of "int8": return tkType
         of "int16": return tkType
         of "int32": return tkType
         of "int64": return tkType
-        of "nil": return tkType
         of "char": return tkType
         of "bool": return tkType
         of "string": return tkType

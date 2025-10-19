@@ -5,6 +5,8 @@ type
         tkIdent,        # generic identifier (type names, function names, keywords not matched)
         tkAt,           # acess between identifiers, ex: Character@new
         tkNumber,
+        tkNil,          # nil
+        tkBool,         # true | false
         tkString,
         tkType,         # int, int8/16/32/64, string, bool, seq<T>, float, char,
                         # enum, object, number, seq<>, auto, void, nil...
@@ -49,7 +51,8 @@ type
         astBlock,
         
         astProgram,
-        astIf,          # .if (a)          have end 
+        astIf,          # .if (a)          have end
+        astClause,      # clause of an if/elif/else ast
         astWhile,       # .while (a)       have end
         astForIn,       # .for (a in b)    have end
 

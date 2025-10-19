@@ -1,3 +1,6 @@
-.while (a) have
+.while (.invoke __eqls(true, false)) have
+    .invoke echo("hello")
+    .invoke echo("hello")
+    .invoke echo("hello")
     .invoke echo("hello")
 end
