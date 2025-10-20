@@ -1,7 +1,7 @@
-.if (true) have
+.if (false) have
     .invoke echo(123)
-.elif (true) have
-    .invoke echo(123)
+.elif (false) have
+    .invoke echo(333)
 .else
-    .invoke echo(123)
+    .invoke echo(321)
 end

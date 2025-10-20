@@ -1,6 +1,7 @@
 import std/os
 import src/parsing/parser
 import src/parsing/showTree
+import src/codegen/compiler
 import src/lexing/tokenizer
 import src/common/token
 
@@ -35,3 +36,7 @@ when isMainModule:
     var astProgram = p.parseProgram()
     astProgram.printAst()
     astProgram.printRootSummary()
+
+    echo "---- Compilation ----"
+    let generatedCode = compiler.compile(astProgram)
+    echo generatedCode

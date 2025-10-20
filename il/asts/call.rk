@@ -1,1 +1,1 @@
-.invoke echo(1)
+.invoke echo(1, 2)
