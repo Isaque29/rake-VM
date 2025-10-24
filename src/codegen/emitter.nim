@@ -229,6 +229,13 @@ proc emitNode*(e: Emitter, node: Ast) =
         emitFunc(e, node)
     of astBlock:
         emitBlock(e, node)
+    of tkDotVarSet:
+        if node.children.len >= 2 and node.children[0].kind == tkIdent:
+            let nm = node.children[0].lexeme
+            let rhs = emitExpr(e, node.children[^1])
+            addLine(e, "var " & nm & " = " & rhs)
+        else:
+            emitSet(e, node)
     of tkDotSet:
         emitSet(e, node)
     of tkDotLet:
@@ -236,6 +243,13 @@ proc emitNode*(e: Emitter, node: Ast) =
             let nm = node.children[0].lexeme
             let rhs = emitExpr(e, node.children[^1])
             addLine(e, "let " & nm & " = " & rhs)
+        else:
+            emitSet(e, node)
+    of tkDotConst:
+        if node.children.len >= 2 and node.children[0].kind == tkIdent:
+            let nm = node.children[0].lexeme
+            let rhs = emitExpr(e, node.children[^1])
+            addLine(e, "const " & nm & " = " & rhs)
         else:
             emitSet(e, node)
     of tkDotInvoke:

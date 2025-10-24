@@ -265,7 +265,7 @@ method parseBody(p: Parser; stopKinds: seq[Kind]): Ast {.base.} =
                 continue
 
         case k
-        of tkDotSet, tkDotLet, tkDotConst:
+        of tkDotVarSet, tkDotSet, tkDotLet, tkDotConst:
             let tok = advance(p)
             skipNewlines(p)
             let target = parsePrimary(p)

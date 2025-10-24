@@ -82,6 +82,7 @@ proc keywordKind(ident: string): Kind =
 
 proc dotCmdKind(name: string): Kind =
     case name
+        of "varset": return tkDotVarSet
         of "set": return tkDotSet
         of "let": return tkDotLet
         of "const": return tkDotConst

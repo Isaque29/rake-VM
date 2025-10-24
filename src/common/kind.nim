@@ -32,6 +32,7 @@ type
         tkFuncSet,      # funcset
 
         # dot-commands
+        tkDotVarSet,    # .varset
         tkDotSet,       # .set
         tkDotLet,       # .let
         tkDotConst,     # .const
