@@ -4,12 +4,13 @@ import src/parsing/showTree
 import src/codegen/compiler
 import src/lexing/tokenizer
 import src/common/token
+const version = staticRead("version.txt")
 
 when isMainModule:
     echo "---- Rake VM ----"
 
     if paramCount() < 1:
-        echo readFile("version.txt")
+        echo version
         quit(0)
     
     var path = paramStr(1)
