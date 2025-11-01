@@ -5,6 +5,6 @@ end
 .varset i 0
 
 .while (true) have
-    .set i .invoke sum(i, .invoke div(i, 1))
+    .set i .invoke sum(i, .invoke sum(1, 0))
     .invoke display(i)
 end
