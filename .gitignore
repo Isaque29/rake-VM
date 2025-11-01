@@ -6,4 +6,4 @@ rake.exe
 rake
 Rive
 rake.sln
-out.nim # the generated code goes here
+out.nim
