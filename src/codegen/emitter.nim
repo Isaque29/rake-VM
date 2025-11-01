@@ -7,8 +7,9 @@ type
         buf*: string
         indentLevel*: int
         builtins*: Table[string, string]
-        impls*: Table[string, string]
+        impls*: Table[string, seq[string]]
         imports*: seq[string]
+        declaredByArity*: Table[string, Table[string, string]]
 
 proc emitNode*(e: Emitter, node: Ast)
 
@@ -17,8 +18,9 @@ proc newEmitter*(): Emitter =
     result.buf = ""
     result.indentLevel = 0
     result.builtins = initTable[string, string]()
-    result.impls = initTable[string, string]()
+    result.impls = initTable[string, seq[string]]()
     result.imports = @[]
+    result.declaredByArity = initTable[string, Table[string, string]]()
 
 proc addLine*(e: Emitter, s: string = "") =
     for i in 0..<e.indentLevel: e.buf.add("    ")
@@ -36,7 +38,10 @@ proc registerBuiltin*(e: Emitter, name: string, templat: string) =
     e.builtins[name] = templat
 
 proc registerImpl*(e: Emitter, name: string, nimCode: string) =
-    e.impls[name] = nimCode
+    if name in e.impls:
+        e.impls[name].add(nimCode)
+    else:
+        e.impls[name] = @[nimCode]
 
 proc addImport*(e: Emitter, stmt: string) =
     e.imports.add(stmt)
@@ -54,6 +59,45 @@ proc emitType*(e: Emitter, t: Ast): string =
         return t.lexeme
     else:
         return "auto"
+
+proc formatPositionaltemplate(templ: string, args: seq[string]): string =
+    var outt = newStringOfCap(templ.len * 2)
+    var i = 0
+    var autoIdx = 0
+    while i < templ.len:
+        let c = templ[i]
+        if c == '{' and i+1 < templ.len and templ[i+1] == '{':
+            outt.add('{'); i += 2; continue
+        if c == '}' and i+1 < templ.len and templ[i+1] == '}':
+            outt.add('}'); i += 2; continue
+
+        if c == '{':
+            var j = i + 1
+            while j < templ.len and templ[j] != '}':
+                j.inc()
+            if j >= templ.len:
+                return "# template error: missing '}' in: " & templ
+            let token = templ.substr(i+1, j-(i+1))
+            if token.len == 0:
+                if autoIdx >= args.len:
+                    return "# template error: auto placeholder index out of range {} in: " & templ
+                outt.add(args[autoIdx]); autoIdx.inc()
+            elif token == "args":
+                outt.add(args.join(", "))
+            else:
+                var ok = true
+                for ch in token:
+                    if ch < '0' or ch > '9': ok = false; break
+                if not ok:
+                    return "# template error: invalid placeholder {" & token & "} in: " & templ
+                let idx = parseInt(token)
+                if idx < 0 or idx >= args.len:
+                    return "# template error: placeholder index out of range {" & token & "} in: " & templ
+                outt.add(args[idx])
+            i = j + 1
+        else:
+            outt.add(c); i.inc()
+    return outt
 
 proc emitExpr*(e: Emitter, node: Ast): string =
     case node.kind
@@ -87,13 +131,8 @@ proc emitExpr*(e: Emitter, node: Ast): string =
             collectedArgs.add(emitExpr(e, node.children[i]))
 
         if calleeNameOrExpr in e.builtins:
-            var templat = e.builtins[calleeNameOrExpr]
-            var outt = templat
-            outt = outt.replace("{args}", collectedArgs.join(", "))
-            outt = outt.replace("{callee}", calleeNameOrExpr)
-            return outt
-
-        return calleeNameOrExpr & "(" & collectedArgs.join(", ") & ")"
+            let templat = e.builtins[calleeNameOrExpr]
+            return formatPositionalTemplate(templat, collectedArgs)
 
     else:
         var parts: seq[string] = @[]
@@ -177,6 +216,24 @@ proc emitFor*(e: Emitter, node: Ast) =
             return
     addLine(e, "# malformed for")
 
+proc registerMangled*(e: Emitter, origName: string, arity: int, mangled: string) =
+    let k = $arity
+    if origName in e.declaredByArity:
+        var inner = e.declaredByArity[origName]
+        inner[k] = mangled
+        e.declaredByArity[origName] = inner
+    else:
+        var t = initTable[string, string]()
+        t[k] = mangled
+        e.declaredByArity[origName] = t
+
+proc lookupMangled*(e: Emitter, origName: string, arity: int): string =
+    if not (origName in e.declaredByArity): return ""
+    let inner = e.declaredByArity[origName]
+    let k = $arity
+    if k in inner: return inner[k]
+    return ""
+
 proc emitFunc*(e: Emitter, node: Ast) =
     # node.lexeme = name
     var name = node.lexeme
@@ -212,7 +269,15 @@ proc emitFunc*(e: Emitter, node: Ast) =
     if retTypeNode != nil:
         retSig = ": " & emitType(e, retTypeNode)
 
-    addLine(e, "proc " & name & paramsSig & retSig & " =")
+    let arity = paramsSigParts.len
+    var outName = name
+
+    if name in e.declaredByArity:
+        let existingCount = e.declaredByArity[name].len
+        outName = name & $existingCount
+    registerMangled(e, name, arity, outName)
+
+    addLine(e, "proc " & outName & paramsSig & retSig & " =")
     indentInc(e)
     if bodyNode != nil:
         emitBlock(e, bodyNode)
@@ -224,10 +289,15 @@ proc emitFunc*(e: Emitter, node: Ast) =
 proc emitNode*(e: Emitter, node: Ast) =
     case node.kind
     of astProgram:
-        for _, code in e.impls:
-            addLine(e, code)
         if e.imports.len > 0:
-            for im in e.imports: addLine(e, im)
+            for im in e.imports:
+                addLine(e, im)
+            addLine(e, "")
+
+        for name, codes in e.impls:
+            for code in codes:
+                addLine(e, code)
+        if e.impls.len > 0:
             addLine(e, "")
 
         for ch in node.children:
