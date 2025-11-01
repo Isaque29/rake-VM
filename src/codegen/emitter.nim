@@ -64,31 +64,38 @@ proc emitExpr*(e: Emitter, node: Ast): string =
             return node.lexeme
         else:
             var args: seq[string] = @[]
-            for c in node.children: args.add(emitExpr(e, c))
+            for c in node.children:
+                args.add(emitExpr(e, c))
             return node.lexeme & "(" & args.join(", ") & ")"
     of tkDotInvoke:
         if node.children.len == 0:
             return node.lexeme
-        let callee = node.children[0]
-        # if callee is ident and registered in builtins, use template
-        if callee.kind == tkIdent and callee.lexeme in e.builtins:
-            var args: seq[string] = @[]
-            for i in 1 ..< node.children.len:
-                args.add(emitExpr(e, node.children[i]))
-            var templat = e.builtins[callee.lexeme]
-            var outt = templat
-            outt = outt.replace("{args}", args.join(", "))
-            outt = outt.replace("{callee}", callee.lexeme)
-            return outt
+
+        let calleeNode = node.children[0]
+
+        var calleeNameOrExpr = ""
+        var collectedArgs: seq[string] = @[]
+
+        if calleeNode.kind == tkIdent and calleeNode.children.len > 0:
+            calleeNameOrExpr = calleeNode.lexeme
+            for c in calleeNode.children:
+                collectedArgs.add(emitExpr(e, c))
         else:
-            # normal call: callee(args...)
-            var calleeS = emitExpr(e, callee)
-            var args2: seq[string] = @[]
-            for i in 1 ..< node.children.len:
-                args2.add(emitExpr(e, node.children[i]))
-            return calleeS & "(" & args2.join(", ") & ")"
+            calleeNameOrExpr = emitExpr(e, calleeNode)
+
+        for i in 1 ..< node.children.len:
+            collectedArgs.add(emitExpr(e, node.children[i]))
+
+        if calleeNameOrExpr in e.builtins:
+            var templat = e.builtins[calleeNameOrExpr]
+            var outt = templat
+            outt = outt.replace("{args}", collectedArgs.join(", "))
+            outt = outt.replace("{callee}", calleeNameOrExpr)
+            return outt
+
+        return calleeNameOrExpr & "(" & collectedArgs.join(", ") & ")"
+
     else:
-        # fallback: try to print children concatenated
         var parts: seq[string] = @[]
         for c in node.children:
             parts.add(emitExpr(e, c))
